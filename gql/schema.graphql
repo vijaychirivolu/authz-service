@@ -1,0 +1,44 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  # Health check endpoint
+  health: HealthResponse!
+  # Version information
+  version: VersionResponse!
+}
+
+type Mutation {
+  # Check if a user has permission to perform an action on a resource
+  checkPermission(input: PermissionInput!): PermissionResponse!
+}
+
+# Input for permission check
+input PermissionInput {
+  # The action to check (e.g., "read", "write", "delete")
+  action: String!
+  # The type of resource (e.g., "document", "user", "project")
+  resourceType: String!
+  # The ID of the specific resource (optional)
+  resourceId: String
+}
+
+# Response for permission check
+type PermissionResponse {
+  # Whether the permission is allowed
+  allowed: Boolean!
+  # Error message if any
+  error: String
+}
+
+# Health check response
+type HealthResponse {
+  status: String!
+}
+
+# Version information response
+type VersionResponse {
+  version: String!
+}
