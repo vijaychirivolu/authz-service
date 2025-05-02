@@ -22,7 +22,7 @@ func RequestLogger() gin.HandlerFunc {
 		c.Next()
 
 		// After the request is processed, calculate the duration
-		duration := time.Since(start).Milliseconds()
+		duration := time.Since(start)
 
 		// Collect other useful info (e.g., status code, user ID, IP address)
 		statusCode := c.Writer.Status()

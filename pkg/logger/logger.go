@@ -1,8 +1,13 @@
+// Package logger provides structured logging capabilities for the application
 package logger
 
 import (
+	"io"
+	"os"
 	"runtime"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -12,115 +17,238 @@ var (
 	once sync.Once
 )
 
-// LogEntry represents the structure of a log entry.
-type LogEntry struct {
-	Message    string `json:"message"`
-	RequestID  string `json:"request_id"`
-	UserID     string `json:"user_id"`
-	IP         string `json:"ip_address"`
-	StatusCode int    `json:"status_code"`
-	Duration   int64  `json:"duration"`
-	Error      string `json:"error"`
+// LogConfig holds logger configuration options
+type LogConfig struct {
+	Level  string // debug, info, warn, error, fatal, panic
+	Format string // json, text
+	Output io.Writer
 }
 
-// InitLogger configures the logger for structured JSON logging.
-// It's safe to call multiple times - will only initialize once.
-func InitLogger() {
+// SetupLogrusFormatter configures the logrus formatter based on the format string
+func setupLogrusFormatter(format string) logrus.Formatter {
+	switch strings.ToLower(format) {
+	case "text":
+		return &logrus.TextFormatter{
+			FullTimestamp:   true,
+			TimestampFormat: time.RFC3339,
+		}
+	default:
+		return &logrus.JSONFormatter{
+			TimestampFormat: time.RFC3339,
+			FieldMap: logrus.FieldMap{
+				logrus.FieldKeyTime:  "timestamp",
+				logrus.FieldKeyLevel: "level",
+				logrus.FieldKeyMsg:   "message",
+			},
+		}
+	}
+}
+
+// ParseLogLevel parses a string log level to a logrus level
+func parseLogLevel(level string) logrus.Level {
+	switch strings.ToLower(level) {
+	case "debug":
+		return logrus.DebugLevel
+	case "info":
+		return logrus.InfoLevel
+	case "warn", "warning":
+		return logrus.WarnLevel
+	case "error":
+		return logrus.ErrorLevel
+	case "fatal":
+		return logrus.FatalLevel
+	case "panic":
+		return logrus.PanicLevel
+	default:
+		return logrus.InfoLevel
+	}
+}
+
+// InitLogger configures the logger for structured logging
+func InitLogger(config LogConfig) {
 	once.Do(func() {
 		log = logrus.New()
-		log.SetFormatter(&logrus.JSONFormatter{})
-		log.SetLevel(logrus.InfoLevel)
+
+		// Set formatter
+		log.SetFormatter(setupLogrusFormatter(config.Format))
+
+		// Set output
+		if config.Output != nil {
+			log.SetOutput(config.Output)
+		} else {
+			log.SetOutput(os.Stdout)
+		}
+
+		// Set level
+		log.SetLevel(parseLogLevel(config.Level))
+
+		// Add caller info to all log entries
+		log.SetReportCaller(true)
 	})
 }
 
 // getLogger ensures logger is initialized before use
 func getLogger() *logrus.Logger {
 	if log == nil {
-		InitLogger()
+		// Initialize with defaults if not already done
+		InitLogger(LogConfig{
+			Level:  "info",
+			Format: "json",
+			Output: os.Stdout,
+		})
 	}
 	return log
 }
 
-// GenerateStackTrace generates a dynamic stack trace
-func GenerateStackTrace() string {
-	buf := make([]byte, 1024)
-	n := runtime.Stack(buf, false)
-	return string(buf[:n])
-}
-
-// logMessage is a generic function to log messages at different levels.
-func logMessage(level logrus.Level, message string, logFields logrus.Fields) {
-	if level == logrus.ErrorLevel || level == logrus.FatalLevel || level == logrus.PanicLevel {
-		//logFields["error"] = errorMessage
-		logFields["stack_trace"] = GenerateStackTrace()
-	}
-	getLogger().WithFields(logFields).Log(level, message)
-}
-
-// LogRequest logs the HTTP request details at INFO level.
-func LogRequest(requestID, userID, ip string, statusCode int, duration int64, errorMessage string) {
-	logEntry := LogEntry{
-		Message:    "Request processed",
-		RequestID:  requestID,
-		UserID:     userID,
-		IP:         ip,
-		StatusCode: statusCode,
-		Duration:   duration,
-		Error:      errorMessage,
+// getCaller returns the caller information for logging
+func getCaller(skip int) (string, string, int) {
+	pc, file, line, ok := runtime.Caller(skip)
+	if !ok {
+		return "unknown", "unknown", 0
 	}
 
-	logMessage(logrus.TraceLevel, logEntry.Message, logrus.Fields{
-		"request_id":  logEntry.RequestID,
-		"user_id":     logEntry.UserID,
-		"ip_address":  logEntry.IP,
-		"status_code": logEntry.StatusCode,
-		"duration":    logEntry.Duration,
-		"error":       logEntry.Error,
-	})
+	// Get just the function name
+	fn := runtime.FuncForPC(pc)
+	if fn == nil {
+		return "unknown", file, line
+	}
+
+	// Get full function name
+	funcName := fn.Name()
+
+	// Extract only the function name without path
+	parts := strings.Split(funcName, ".")
+	funcName = parts[len(parts)-1]
+
+	// For file, get only the base filename
+	parts = strings.Split(file, "/")
+	file = parts[len(parts)-1]
+
+	return funcName, file, line
 }
 
-// LogInfo logs general info messages at INFO level.
+// generateCallStack generates a dynamic call stack
+func generateCallStack(skip int, depth int) string {
+	var builder strings.Builder
+
+	for i := skip; i < skip+depth; i++ {
+		fn, file, line := getCaller(i)
+		if fn == "unknown" && file == "unknown" {
+			break
+		}
+		builder.WriteString(file)
+		builder.WriteString(":")
+		builder.WriteString(fn)
+		builder.WriteString(":")
+		builder.WriteString(string(line))
+		builder.WriteString("\n")
+	}
+
+	return builder.String()
+}
+
+// addCallerInfo adds caller information to the given fields
+func addCallerInfo(fields logrus.Fields) logrus.Fields {
+	fn, file, line := getCaller(3) // Skip through our logging functions
+
+	if fields == nil {
+		fields = logrus.Fields{}
+	}
+
+	fields["function"] = fn
+	fields["file"] = file
+	fields["line"] = line
+
+	return fields
+}
+
+// LogRequest logs HTTP request details
+func LogRequest(requestID, userID, ip string, statusCode int, duration time.Duration, errorMessage string) {
+	fields := logrus.Fields{
+		"request_id":  requestID,
+		"user_id":     userID,
+		"ip_address":  ip,
+		"status_code": statusCode,
+		"duration_ms": duration.Milliseconds(),
+	}
+
+	if errorMessage != "" {
+		fields["error"] = errorMessage
+	}
+
+	fields = addCallerInfo(fields)
+
+	if statusCode >= 500 {
+		getLogger().WithFields(fields).Error("Request error")
+	} else if statusCode >= 400 {
+		getLogger().WithFields(fields).Warn("Request warning")
+	} else {
+		getLogger().WithFields(fields).Info("Request processed")
+	}
+}
+
+// LogInfo logs at INFO level
 func LogInfo(message string, fields ...interface{}) {
-	getLogger().WithFields(ParseFields(fields...)).Info(message)
+	getLogger().WithFields(addCallerInfo(ParseFields(fields...))).Info(message)
 }
 
-// LogWarn logs warnings at WARN level.
+// LogWarn logs at WARN level
 func LogWarn(message string, fields ...interface{}) {
-	getLogger().WithFields(ParseFields(fields...)).Warn(message)
+	getLogger().WithFields(addCallerInfo(ParseFields(fields...))).Warn(message)
 }
 
-// LogDebug logs debug messages at DEBUG level.
+// LogDebug logs at DEBUG level
 func LogDebug(message string, fields ...interface{}) {
-	getLogger().WithFields(ParseFields(fields...)).Debug(message)
+	getLogger().WithFields(addCallerInfo(ParseFields(fields...))).Debug(message)
 }
 
-// LogFatal logs fatal messages at FATAL level.
-func LogFatal(message string, fields ...interface{}) {
-	getLogger().WithFields(ParseFields(fields...)).Error(message) // Changed from Fatal to Error for testing
-}
-
-// LogError logs error messages at ERROR level.
+// LogError logs at ERROR level
 func LogError(message string, fields ...interface{}) {
-	getLogger().WithFields(ParseFields(fields...)).Error(message)
+	logFields := ParseFields(fields...)
+
+	// Add call stack for errors
+	logFields["call_stack"] = generateCallStack(3, 5)
+
+	getLogger().WithFields(addCallerInfo(logFields)).Error(message)
 }
 
-// LogPanic logs error messages at PANIC level.
+// LogFatal logs at FATAL level
+func LogFatal(message string, fields ...interface{}) {
+	logFields := ParseFields(fields...)
+
+	// Add call stack for fatal errors
+	logFields["call_stack"] = generateCallStack(3, 10)
+
+	getLogger().WithFields(addCallerInfo(logFields)).Fatal(message)
+}
+
+// LogPanic logs at PANIC level
 func LogPanic(message string, fields ...interface{}) {
-	logMessage(logrus.PanicLevel, message, ParseFields(fields...))
+	logFields := ParseFields(fields...)
+
+	// Add full call stack for panics
+	logFields["call_stack"] = generateCallStack(3, 15)
+
+	getLogger().WithFields(addCallerInfo(logFields)).Panic(message)
 }
 
-// Helper func to convert variadic fields into structured logging fields
+// ParseFields converts variadic fields into structured logging fields
 func ParseFields(fields ...interface{}) logrus.Fields {
 	logFields := logrus.Fields{}
 
-	for i := 0; i < len(fields)-1; i += 2 {
+	// Must have pairs of key/value
+	if len(fields)%2 != 0 {
+		return logFields
+	}
+
+	for i := 0; i < len(fields); i += 2 {
 		key, ok := fields[i].(string)
 		if !ok {
-			continue // skip the non-string keys
+			continue // Skip non-string keys
 		}
 
-		// if the field is an error, log its error message
-		if err, isErr := fields[i+1].(error); isErr {
+		// Handle error values specially
+		if err, isErr := fields[i+1].(error); isErr && err != nil {
 			logFields[key] = err.Error()
 		} else {
 			logFields[key] = fields[i+1]
