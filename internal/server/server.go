@@ -127,7 +127,8 @@ func (s *Server) setupRouter() {
 
 	// Protected GraphQL endpoint with JWT auth
 	protected := router.Group("/graphql")
-	protected.Use(s.jwtAuth.GinMiddleware(), graphqlUserContext())
+	//protected.Use(s.jwtAuth.GinMiddleware(), graphqlUserContext())
+	protected.Use(graphqlUserContext())
 	protected.POST("", func(c *gin.Context) {
 		graphqlHandler.ServeHTTP(c.Writer, c.Request)
 	})
