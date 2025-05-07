@@ -15,6 +15,8 @@ import (
 	"authz-service/pkg/logger"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/extension"
+	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 )
@@ -82,6 +84,14 @@ func (s *Server) setupRouter() {
 	resolver := gql.NewResolver(s.permitService)
 	graphqlHandler := handler.New(gql.NewExecutableSchema(gql.Config{Resolvers: resolver}))
 
+	// Configure transports
+	graphqlHandler.AddTransport(transport.Options{})
+	graphqlHandler.AddTransport(transport.GET{})
+	graphqlHandler.AddTransport(transport.POST{})
+	graphqlHandler.AddTransport(transport.MultipartForm{})
+
+	// Enable introspection
+	graphqlHandler.Use(extension.Introspection{})
 	// Root route
 	router.GET("/", func(c *gin.Context) {
 		if gin.Mode() != gin.ReleaseMode {
@@ -114,11 +124,6 @@ func (s *Server) setupRouter() {
 			playground.Handler("GraphQL Playground", "/graphql").ServeHTTP(c.Writer, c.Request)
 		})
 	}
-
-	// Public GraphQL endpoint - no auth required
-	router.POST("/graphql/public", func(c *gin.Context) {
-		graphqlHandler.ServeHTTP(c.Writer, c.Request)
-	})
 
 	// Protected GraphQL endpoint with JWT auth
 	protected := router.Group("/graphql")
