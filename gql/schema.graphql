@@ -22,7 +22,10 @@ input PermissionInput {
   # The type of resource (e.g., "document", "user", "project")
   resourceType: String!
   # The ID of the specific resource (optional)
-  resourceId: String
+  resourceId: String!
+  # The ID of the tenant
+  tenantId: String!
+
 }
 
 # Response for permission check

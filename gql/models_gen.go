@@ -10,9 +10,10 @@ type Mutation struct {
 }
 
 type PermissionInput struct {
-	Action       string  `json:"action"`
-	ResourceType string  `json:"resourceType"`
-	ResourceID   *string `json:"resourceId,omitempty"`
+	Action       string `json:"action"`
+	ResourceType string `json:"resourceType"`
+	ResourceID   string `json:"resourceId"`
+	TenantID     string `json:"tenantId"`
 }
 
 type PermissionResponse struct {

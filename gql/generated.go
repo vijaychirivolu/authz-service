@@ -2870,7 +2870,7 @@ func (ec *executionContext) unmarshalInputPermissionInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"action", "resourceType", "resourceId"}
+	fieldsInOrder := [...]string{"action", "resourceType", "resourceId", "tenantId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -2893,11 +2893,18 @@ func (ec *executionContext) unmarshalInputPermissionInput(ctx context.Context, o
 			it.ResourceType = data
 		case "resourceId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("resourceId"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.ResourceID = data
+		case "tenantId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tenantId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TenantID = data
 		}
 	}
 

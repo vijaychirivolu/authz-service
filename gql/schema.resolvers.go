@@ -14,7 +14,8 @@ import (
 // CheckPermission is the resolver for the checkPermission field.
 func (r *mutationResolver) CheckPermission(ctx context.Context, input PermissionInput) (*PermissionResponse, error) {
 	// Get user ID from context (set by auth middleware)
-	userID, exists := ctx.Value("userID").(string)
+	//userID, exists := ctx.Value("userID").(string)
+	userID, exists := "vijay", true
 	if !exists {
 		logger.LogError("User ID not found in context during permission check")
 		return &PermissionResponse{
@@ -23,22 +24,17 @@ func (r *mutationResolver) CheckPermission(ctx context.Context, input Permission
 		}, nil
 	}
 
-	// Set default value for resourceId if it's nil
-	resourceID := ""
-	if input.ResourceID != nil {
-		resourceID = *input.ResourceID
-	}
-
 	// Log the permission check request
 	logger.LogInfo("GraphQL permission check request",
 		"user_id", userID,
 		"action", input.Action,
 		"resource_type", input.ResourceType,
-		"resource_id", resourceID,
+		"resource_id", input.ResourceID,
+		"tenant", input.TenantID,
 	)
 
 	// Check permission
-	allowed, err := r.permitService.Check(ctx, userID, input.Action, input.ResourceType, resourceID)
+	allowed, err := r.permitService.Check(ctx, userID, input.Action, input.ResourceType, input.ResourceID, "Tenant")
 	if err != nil {
 		logger.LogError("Failed to check permissions", "error", err)
 		return &PermissionResponse{
