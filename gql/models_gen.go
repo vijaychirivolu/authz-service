@@ -6,9 +6,6 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
-type Mutation struct {
-}
-
 type PermissionInput struct {
 	Action       string `json:"action"`
 	ResourceType string `json:"resourceType"`

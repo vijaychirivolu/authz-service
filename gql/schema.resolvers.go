@@ -11,11 +11,20 @@ import (
 	"fmt"
 )
 
+// Health is the resolver for the health field.
+func (r *queryResolver) Health(ctx context.Context) (*HealthResponse, error) {
+	return &HealthResponse{Status: "ok"}, nil
+}
+
+// Version is the resolver for the version field.
+func (r *queryResolver) Version(ctx context.Context) (*VersionResponse, error) {
+	return &VersionResponse{Version: r.version}, nil
+}
+
 // CheckPermission is the resolver for the checkPermission field.
-func (r *mutationResolver) CheckPermission(ctx context.Context, input PermissionInput) (*PermissionResponse, error) {
+func (r *queryResolver) CheckPermission(ctx context.Context, input PermissionInput) (*PermissionResponse, error) {
 	// Get user ID from context (set by auth middleware)
-	//userID, exists := ctx.Value("userID").(string)
-	userID, exists := "vijay", true
+	userID, exists := ctx.Value("userID").(string)
 	if !exists {
 		logger.LogError("User ID not found in context during permission check")
 		return &PermissionResponse{
@@ -50,21 +59,7 @@ func (r *mutationResolver) CheckPermission(ctx context.Context, input Permission
 	}, nil
 }
 
-// Health is the resolver for the health field.
-func (r *queryResolver) Health(ctx context.Context) (*HealthResponse, error) {
-	return &HealthResponse{Status: "ok"}, nil
-}
-
-// Version is the resolver for the version field.
-func (r *queryResolver) Version(ctx context.Context) (*VersionResponse, error) {
-	return &VersionResponse{Version: r.version}, nil
-}
-
-// Mutation returns MutationResolver implementation.
-func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
-
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
-type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }

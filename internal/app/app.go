@@ -7,7 +7,10 @@ import (
 	"authz-service/pkg/auth"
 	"authz-service/pkg/auth/jwt"
 	"authz-service/pkg/logger"
+	"crypto/tls"
 	"fmt"
+	"net/http"
+	"time"
 
 	permitcfg "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/permit"
@@ -65,9 +68,18 @@ func initPermitService(cfg config.PermitConfig) (*auth.PermitService, error) {
 		return nil, fmt.Errorf("Permit.io API key is not set")
 	}
 
+	// Create a custom HTTP client that skips TLS verification
+	customHttpClient := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // Disable TLS cert verification
+		},
+	}
+
 	// Configure Permit client
 	permitConfig := permitcfg.NewConfigBuilder(cfg.APIKey).
 		WithPdpUrl(cfg.PDPURL).
+		WithHTTPClient(customHttpClient). // set the custom client
 		Build()
 
 	// Create permit client instance

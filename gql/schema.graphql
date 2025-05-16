@@ -1,6 +1,5 @@
 schema {
   query: Query
-  mutation: Mutation
 }
 
 type Query {
@@ -8,9 +7,6 @@ type Query {
   health: HealthResponse!
   # Version information
   version: VersionResponse!
-}
-
-type Mutation {
   # Check if a user has permission to perform an action on a resource
   checkPermission(input: PermissionInput!): PermissionResponse!
 }
